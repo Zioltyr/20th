@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let analyser;
   let microphone;
   let audio = new Audio('hbd.mp3');
+  audio.volume = 0.1; // Set the volume to 20%
 
 
   function updateCandleCount() {
@@ -38,18 +39,49 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function isBlowing() {
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
+  const dataArray = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(dataArray);
 
-    let sum = 0;
-    for (let i = 0; i < bufferLength; i++) {
-      sum += dataArray[i];
-    }
-    let average = sum / bufferLength;
+  let sum = 0;
 
-    return average > 120; //ETO CHANGEEEEEE
+  for (const value of dataArray) {
+    const normalized = (value - 128) / 128;
+    sum += normalized * normalized;
   }
+
+  const volume = Math.sqrt(sum / dataArray.length);
+  return volume > 0.08;
+}
+
+async function startMicrophone() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Your browser does not support microphone access.");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+
+    microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+
+    setInterval(blowOutCandles, 100);
+  } catch (error) {
+    console.error("Microphone access failed:", error);
+    alert("Please allow microphone access and reload the page.");
+  }
+}
+
+startMicrophone();
 
   function blowOutCandles() {
     let blownOut = 0;
